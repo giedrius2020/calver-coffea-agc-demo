@@ -23,45 +23,21 @@
 # ---
 
 # %% [markdown]
-# ### AGC + calver coffea on coffea-casa
+# ### TTree and RNTuple loading comparison while using uproot
 #
-# We'll base this on a few sources:
-# - https://github.com/iris-hep/analysis-grand-challenge/tree/main/analyses/cms-open-data-ttbar (AGC, of course)
-# - https://github.com/alexander-held/CompHEP-2023-AGC (contains a simplified version of AGC)
-# - https://github.com/nsmith-/TTGamma_LongExercise/ (credit Nick Smith for helpful examples of the new API)
-# - (and if time allows, weight features: https://github.com/CoffeaTeam/coffea/blob/backports-v0.7.x/binder/accumulators.ipynb / https://coffeateam.github.io/coffea/api/coffea.analysis_tools.Weights.html#coffea.analysis_tools.Weights.partial_weight)
+# Sources:
+# - 
+# - 
 
 # %%
-from pathlib import Path
-import matplotlib.pyplot as plt
-
 import awkward as ak
 import numpy as np
 import uproot
-import traceback
-from dask.distributed import Client
-import skhep_testdata
 import pandas as pd
 
-import warnings
-
-import utils
-utils.plotting.set_style()
-
-warnings.filterwarnings("ignore")
-
-# client = Client("tls://localhost:8786")
 
 print(f"awkward: {ak.__version__}")
 print(f"uproot: {uproot.__version__}")
-
-# %% [markdown]
-# ### Produce an AGC histogram with Dask (no coffea yet)
-
-# %%
-
-# %% [markdown]
-# Reading in the ROOT file, we can now create a Dask task graph for the calculations and plot that we want to make using `dask-awkward` and `hist.dask`
 
 # %%
 all_files = {}
@@ -78,20 +54,13 @@ events_list = []
 
 # all_files.append("/home/cms-jovyan/my_root_files/rntuple_v4.root") # RNTuple, local, with our own converter v4 
 
-
-# all_files.append("/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19981_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext4-v1_80000_0007.root") # TTree ttbar original
+# Files downloaded locally:
+# all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19981_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext4-v1_80000_0007.root") # TTree ttbar original
 all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root" # TTree local
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v1.root" # RNTuple, local, with our own converter v4 
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v2.root" # RNTuple, local, with our own converter v4 
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v3.root" # RNTuple, local, with our own converter v4 
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v4.root" # RNTuple, local, with our own converter v4 
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_0903_v5.root" # RNTuple, local, with our own converter v5
-all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, local, with our own converter v5
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, local, with our own converter v5
+all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
-
-
+# all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
+# all_files["6x"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, ROOT_6_X (does not work)
 
 
 def load_files_with_uproot(files):
@@ -99,7 +68,7 @@ def load_files_with_uproot(files):
         with uproot.open(fl) as f:
             events = f["Events"]
             events_list.append(events)
-            print("File was loaded with uproot, event count: ", len(events.keys()))
+            # print("File was loaded with uproot, event count: ", len(events.keys()))
             
             # NOTE: to access array: # events.arrays(["Electron_pt"])["Electron_pt"]
         
@@ -132,6 +101,9 @@ load_files_with_uproot(all_files)
 # print("_related_ids: ", events._related_ids)
 # print("page_list_envelopes: ", events.page_list_envelopes)
 
+# %% [markdown]
+# ### timeit tests:
+
 # %%
 import timeit
 events_dict = {}
@@ -144,7 +116,6 @@ def format_test_results(times):
     
     return df
 
-print("Starting to timeit on various functions: ")
 
 def load_file(data_type, file):
     with uproot.open(file) as f:
@@ -182,6 +153,7 @@ def load_10_arrays_while_using_filter_name(events):
     events.arrays(filter_name=chosen_keys)[chosen_keys]
         
 def start_all_performance_tests():
+    print("Starting to timeit on various functions: ")
     times = []
     
     for data_type, file in all_files.items():
@@ -206,11 +178,7 @@ def start_all_performance_tests():
     
     return format_test_results(times)
 
-results = start_all_performance_tests()
 
-
-# %%
-print(results.to_string(index=False))
 
 
 # %%
@@ -277,15 +245,7 @@ def compare_key_lists(ls1, ls2):
 
 
     
-events_tt = events_list[0]
-events_rn = events_list[1]
 
-# # Must be sorted, because otherwise the order is different.
-keys_tt = sorted(events_tt.keys(), key=str.lower)
-keys_rn = sorted(events_rn._keys, key=str.lower)
-
-print(f"TTree keys length: {len(keys_tt)}. RNTuple keys length: {len(keys_rn)}")
-# compare_key_lists(keys_tt, keys_rn)
 
 # %%
 def collect_breaking_points(key):
@@ -321,16 +281,7 @@ def collect_breaking_points(key):
                 print("Index: ", i, f". Failure limits: {(strt, end)}")
                 print("")
 
-key = "Electron_hoe"
-# collect_breaking_points(key)
-print(uproot.const.rntuple_col_type_to_num_dict["splitindex32"])
-# print("Finished cell.")
 
-
-# %%
-# print(events_tt.keys(filter_name=["run", "Electron_hoe"]))
-# print(events_rn.keys(filter_name=["run", "Electron_hoe"]))
-# print(events_rn.keys())
 
 
 # %%
@@ -365,8 +316,40 @@ def compare_array_region(key, events_tt, events_rn):
     print("TT:", arr_tt)
     print("RN:", arr_rn)
     
-# key = "HTXS_Higgs_y"
+
+
+
+# %%
+results = start_all_performance_tests()
+print(results.to_string(index=False))
+
+
+# cluster_starts = [md.num_first_entry for md in events_632.cluster_summaries][1:] # Skip first, because it is 0.
+# print("Starts of clusters: ", cluster_starts)
+
+# # # Must be sorted, because otherwise the order is different.
+# events_tt = events_list[0]
+# events_rn = events_list[1]
+# keys_tt = sorted(events_tt.keys(), key=str.lower)
+# keys_rn = sorted(events_rn._keys, key=str.lower)
+# # print(f"TTree keys length: {len(keys_tt)}. RNTuple keys length: {len(keys_rn)}")
+# compare_key_lists(keys_tt, keys_rn)
+
+# events_632 = events_list[0]
+# events_6x = events_list[1]
+# print("field records: ", events_6x.keys())
+# print("field records: ", events_632.keys())
+
 # key = "SV_pAngle"
-compare_array_region(key, events_tt, events_rn)
+# strt = 1
+# end = 25
+# arr_632 = events_632.arrays(filter_name=[key], entry_start=strt, entry_stop=end)[key]
+# arr_6x = events_6x.arrays(filter_name=[key], entry_start=strt, entry_stop=end)[key]
 # print("Finished cell")
 
+# key = "Electron_hoe"
+# collect_breaking_points(key)
+# print("Finished cell.")
+
+
+# %%
