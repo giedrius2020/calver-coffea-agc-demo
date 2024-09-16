@@ -52,10 +52,10 @@ events_list = []
 
 # Files downloaded locally:
 all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root" # TTree local
-# all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
+all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
 
-all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
+# all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
 # all_files["6x"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, ROOT_6_X (does not work)
 
 
@@ -156,17 +156,17 @@ def start_all_performance_tests():
         time_taken = timeit.timeit(lambda: load_file(data_type, file), number=1)
         times.append((data_type, "load_file", time_taken))
 
-        time_taken = timeit.timeit(lambda: load_arrays_for_each_key(events_dict[data_type]), number=1)
-        times.append((data_type, "load_arrays_for_each_key", time_taken))
+#         time_taken = timeit.timeit(lambda: load_arrays_for_each_key(events_dict[data_type]), number=1)
+#         times.append((data_type, "load_arrays_for_each_key", time_taken))
         
-        time_taken = timeit.timeit(lambda: load_all_arrays(events_dict[data_type]), number=1)
-        times.append((data_type, "load_all_arrays", time_taken))
+#         time_taken = timeit.timeit(lambda: load_all_arrays(events_dict[data_type]), number=1)
+#         times.append((data_type, "load_all_arrays", time_taken))
         
-        time_taken = timeit.timeit(lambda: load_all_arrays_while_using_filter_name(events_dict[data_type]), number=1)
-        times.append((data_type, "load_all_arrays_while_using_filter_name", time_taken))
+#         time_taken = timeit.timeit(lambda: load_all_arrays_while_using_filter_name(events_dict[data_type]), number=1)
+#         times.append((data_type, "load_all_arrays_while_using_filter_name", time_taken))
         
-        time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type]), number=1)
-        times.append((data_type, "load_24_arrays_while_using_filter_name", time_taken))
+#         time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type]), number=1)
+#         times.append((data_type, "load_24_arrays_while_using_filter_name", time_taken))
         
         time_taken = timeit.timeit(lambda: load_array_while_using_filter_name(events_dict[data_type]), number=1)
         times.append((data_type, "load_array_while_using_filter_name", time_taken))
@@ -175,8 +175,22 @@ def start_all_performance_tests():
     return format_test_results(times)
 
 
-# results = start_all_performance_tests()
+results = start_all_performance_tests()
+print(results.to_string(index=False))
+
+# %%
 # print(results.to_string(index=False))
+
+# Pivot the DataFrame
+df_pivot = results.pivot(index='func_name', columns='data_type', values='time(s)')
+
+# Clean up the columns and reset index if needed
+df_pivot.columns.name = None  # Remove the name of the columns
+df_pivot = df_pivot.reset_index()  # Reset the index if you want a cleaner look
+
+# Output the pivoted DataFrame
+print(df_pivot.to_markdown(index=False))
+
 
 # %%
 # This cell compares data between TTree and RNTuple for each key array, ensuring that RNTuple does not have corrupted data:
