@@ -64,7 +64,7 @@ all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19
 all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
 
-# 
+# RNTuple files created with different ROOT versions:
 # all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
 # all_files["6x"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, ROOT_6_X (does not work)
 
@@ -246,6 +246,9 @@ def plot_results(df_pivot):
 
 
 plot_results(results_2)
+
+results_1.to_csv('results_1.csv', index=True)
+results_2.to_csv('results_2.csv', index=True)
 
 
 # %%
