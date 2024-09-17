@@ -39,6 +39,8 @@ import awkward as ak
 import numpy as np
 import uproot
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 print(f"awkward: {ak.__version__}")
@@ -62,7 +64,7 @@ all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19
 all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
 
-#
+# 
 # all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
 # all_files["6x"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, ROOT_6_X (does not work)
 
@@ -88,43 +90,36 @@ load_files_with_uproot(all_files)
 
 
 
-
-# %%
-# # Various available properties:
-# print("Name: ", events.name)
-# print("header: ", events.header)
-# print("footer: ", events.footer)
-# print("num_entries: ", events.num_entries)
-# print("len of field_names: ", len(events.field_names))
-# print("keys: ", len(events.keys()))
-# print(" field_names: ", events.fields)
-# print("column_records: ", events.column_records[:10])
-# print("keys: ", events.keys()[:10])
-# print("_column_records_dict: ", events._column_records_dict)
-# print("_related_ids: ", events._related_ids)
-# print("page_list_envelopes: ", events.page_list_envelopes)
-
 # %% [markdown]
 # ### timeit tests
 # Measure time for different operations related to data loading. Compare durations between TTree and RNTuple operations.<br>
 
 # %%
 import timeit
-events_dict = {}
-
-def format_test_results(times):
-    df = pd.DataFrame(times, columns =['data_type', 'func_name', 'time(s)'])
-    df = df.sort_values(by=['func_name'])
-    df['time(s)'] = df['time(s)'].round(4)
-    df['func_name'] = df['func_name'].str.replace('_', ' ', regex=False)
     
-    # Pivot the DataFrame
-    df_pivot = df.pivot(index='func_name', columns='data_type', values='time(s)')
+def format_test_results(times):
+    df = pd.DataFrame(times )
+    
+    col_count = len(df.columns)
+    
+    # Set custom column names based on col count (quick solution):
+    if col_count == 4:
+        df.columns =['key_cnt', 'data_type', 'func_name', 'time(s)']
+        # Convert key_cnt to int if it's not already
+        df['key_cnt'] = df['key_cnt'].astype(int)
+        df = df.sort_values(by=['key_cnt'])
+        df['func_name'] = df['func_name'].str.replace('_', ' ', regex=False)
+        df['time(s)'] = df['time(s)'].round(4)
+        df_pivot = df.pivot_table(index='key_cnt', columns='data_type', values='time(s)')
 
+    elif col_count == 3:
+        df.columns = ['data_type', 'func_name', 'time(s)']
+        df['time(s)'] = df['time(s)'].round(4)
+        df_pivot = df.pivot_table(index='func_name', columns='data_type', values='time(s)')
     # Clean up the columns and reset index if needed
     df_pivot.columns.name = None  # Remove the name of the columns
     df_pivot = df_pivot.reset_index()  # Reset the index if you want a cleaner look
-
+    
     return df_pivot
 
 
@@ -149,7 +144,15 @@ def load_array_while_using_filter_name(events):
     events.arrays(filter_name=[key])[key]
     
     
-def load_24_arrays_while_using_filter_name(events):
+def load_24_arrays_while_using_filter_name(events, keys):
+    events.arrays(filter_name=keys)[keys]
+        
+def start_all_performance_tests():
+    print("Starting to timeit on various functions: ")
+    times = []
+    # events_dict = {}
+
+    
     chosen_keys = [
         "GenPart_pt", "GenPart_eta", "GenPart_phi", "CorrT1METJet_phi",
         "GenJet_pt", "CorrT1METJet_eta", "SoftActivityJet_pt",
@@ -161,11 +164,7 @@ def load_24_arrays_while_using_filter_name(events):
         "Jet_btagDeepFlavCvB", "Jet_cRegCorr"
         ]
     
-    events.arrays(filter_name=chosen_keys)[chosen_keys]
-        
-def start_all_performance_tests():
-    print("Starting to timeit on various functions: ")
-    times = []
+    
     
     for data_type, file in all_files.items():
         time_taken = timeit.timeit(lambda: load_file(data_type, file), number=1)
@@ -180,25 +179,74 @@ def start_all_performance_tests():
         time_taken = timeit.timeit(lambda: load_all_arrays_while_using_filter_name(events_dict[data_type]), number=1)
         times.append((data_type, "load_all_arrays_while_using_filter_name", time_taken))
         
-        time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type]), number=1)
+        time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], chosen_keys), number=1)
         times.append((data_type, "load_24_arrays_while_using_filter_name", time_taken))
         
         time_taken = timeit.timeit(lambda: load_array_while_using_filter_name(events_dict[data_type]), number=1)
         times.append((data_type, "load_array_while_using_filter_name", time_taken))
-
-    
+        
     return format_test_results(times)
 
 
-results = start_all_performance_tests()
-# Output results:
-print("timeit results (in seconds): \n", results.to_markdown(index=False))
+def measure_increasing_key_count():
+    print("Starting to timeit loading arrays with increasing count: ")
+    times = []
+    all_keys = events_dict["TT"].keys()
+    print("Count of keys: ", len(all_keys))
+    
+    for data_type, file in all_files.items():
+        for i in range(1, len(all_keys), 50):
+            time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys[:i]), number=1)
+            times.append((i, data_type, f"load_{i}_arrays_while_using_filter_name", time_taken))
+        #     print(data_type, i)
+        # print(data_type, "tests finished")
+    return format_test_results(times)
+
+
+results_1 = start_all_performance_tests()
+results_2 = measure_increasing_key_count()
+
+# Calculate the sum for each column (excluding 'func_name')
+sums = results_1[['RN', 'TT']].sum()
+results_1.loc['Total'] = pd.Series(sums, name='Total')
+
+print("timeit results (in seconds): \n", results_1.to_markdown(index=True))
+
+
 
 
 # %% [markdown]
 # ### Check RNTuple data integrity
 # When loading RNTuple data we need to be sure that data is correct. We do that by comparing RNTuple array data with TTree - it should be identical. <br>
 # Comparison should be done with all arrays, but for demonstration purposes and time saving we use specific columns from https://github.com/iris-hep/idap-200gbps/blob/main/materialize_branches.ipynb notebook.
+
+# %%
+def plot_results(df_pivot):
+    # Set plot style
+    sns.set(style="whitegrid")
+
+    # Melt the DataFrame to a long format for seaborn
+    df_melted = df_pivot.melt(id_vars=['key_cnt'], var_name='Data Type', value_name='Time (s)')
+    
+    # Create a line plot
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(x='key_cnt', y='Time (s)', hue='Data Type', marker='o', data=df_melted)
+    
+    # Add labels and title
+    plt.xlabel('Count of loaded arrays', fontsize=12)
+    plt.ylabel('Execution Time (s)', fontsize=12)
+    plt.title('Execution Time by Count Of Arrays and Data Type', fontsize=14)
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Show plot
+    plt.tight_layout()
+    plt.show()
+
+
+plot_results(results_2)
+
 
 # %%
 # This cell compares data between TTree and RNTuple for each key array, ensuring that RNTuple does not have corrupted data:
