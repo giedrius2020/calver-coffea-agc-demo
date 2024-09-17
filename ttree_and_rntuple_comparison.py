@@ -25,9 +25,14 @@
 # %% [markdown]
 # ### TTree and RNTuple loading comparison while using uproot
 #
-# Sources:
-# - 
-# - 
+# RNTuple is a developed I/O subsystem available in ROOT as experimental feature. It supposed to fully change TTree. (https://indico.fnal.gov/event/23628/contributions/240607/attachments/154861/201536/rntuple-rootws22.pdf) <br> 
+# After RNTuple files are created with ROOT, we need to make sure that uproot is able to load data from them with no issues. <br>
+# Additionally, checks must be done to compare TTree and RNTuple performance - it is expected that RNTuple should more efficient in the context of time and memory.<br>
+#
+# This notebook demonstrates:
+# - Various time comparison tests for TTree and RNTuple on uproot abstraction level;
+# - Some data integrity tests for RNTuple
+#
 
 # %%
 import awkward as ak
@@ -41,10 +46,12 @@ print(f"uproot: {uproot.__version__}")
 
 # %% [markdown]
 # ### File loading
+# Load ROOT files with one of two approaches: uproot or coffea.<br>
+# NOTE: coffea uses Dask, which does not support RNTuple yet. Therefore, in this notebook we will only use data loaded with uproot.
 
 # %%
 all_files = {}
-events_list = []
+events_dict = {}
 
 ## Remote files:
 # all_files.append("root://eospublic.cern.ch//eos/root-eos/AGC/rntuple/nanoAOD/TT_TuneCUETP8M1_13TeV-amcatnlo-pythia8/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root") # RNTuple remote
@@ -55,23 +62,23 @@ all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19
 all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
 
+#
 # all_files["632"] = "/home/cms-jovyan/my_root_files/rntuple_v6_632_0909.root" # RNTuple, ROOT_632 (works)
 # all_files["6x"] = "/home/cms-jovyan/my_root_files/rntuple_v7_6_0909.root" # RNTuple, ROOT_6_X (does not work)
 
 
 def load_files_with_uproot(files):
-    for fl in files.values():
-        with uproot.open(fl) as f:
+    for key, file in files.items():
+        with uproot.open(file) as f:
             events = f["Events"]
-            events_list.append(events)
-            # print("File was loaded with uproot, event count: ", len(events.keys()))
+            events_dict[key] = events
+            print("File was loaded with uproot, event count: ", len(events.keys()))
             
-            # NOTE: to access array: # events.arrays(["Electron_pt"])["Electron_pt"]
         
 def load_files_with_coffea(files):
-    for fl in files:
-        events = NanoEventsFactory.from_root({fl: "Events"}, schemaclass=NanoAODSchema).events()
-        events_list.append(events)
+    for key, file in files.items():
+        events = NanoEventsFactory.from_root({file: "Events"}, schemaclass=NanoAODSchema).events()
+        events_dict[key] = events
         print("File was loaded with coffea, fields count: ", len(events.fields))
         
 load_files_with_uproot(all_files)
@@ -98,7 +105,8 @@ load_files_with_uproot(all_files)
 # print("page_list_envelopes: ", events.page_list_envelopes)
 
 # %% [markdown]
-# ### timeit tests:
+# ### timeit tests
+# Measure time for different operations related to data loading. Compare durations between TTree and RNTuple operations.<br>
 
 # %%
 import timeit
@@ -110,7 +118,14 @@ def format_test_results(times):
     df['time(s)'] = df['time(s)'].round(4)
     df['func_name'] = df['func_name'].str.replace('_', ' ', regex=False)
     
-    return df
+    # Pivot the DataFrame
+    df_pivot = df.pivot(index='func_name', columns='data_type', values='time(s)')
+
+    # Clean up the columns and reset index if needed
+    df_pivot.columns.name = None  # Remove the name of the columns
+    df_pivot = df_pivot.reset_index()  # Reset the index if you want a cleaner look
+
+    return df_pivot
 
 
 def load_file(data_type, file):
@@ -130,7 +145,7 @@ def load_all_arrays_while_using_filter_name(events):
     events.arrays(filter_name=chosen_keys)[chosen_keys]
 
 def load_array_while_using_filter_name(events):
-    key = "nGenVisTau"
+    key = "GenPart_pt"
     events.arrays(filter_name=[key])[key]
     
     
@@ -156,17 +171,17 @@ def start_all_performance_tests():
         time_taken = timeit.timeit(lambda: load_file(data_type, file), number=1)
         times.append((data_type, "load_file", time_taken))
 
-#         time_taken = timeit.timeit(lambda: load_arrays_for_each_key(events_dict[data_type]), number=1)
-#         times.append((data_type, "load_arrays_for_each_key", time_taken))
+        time_taken = timeit.timeit(lambda: load_arrays_for_each_key(events_dict[data_type]), number=1)
+        times.append((data_type, "load_arrays_for_each_key", time_taken))
         
-#         time_taken = timeit.timeit(lambda: load_all_arrays(events_dict[data_type]), number=1)
-#         times.append((data_type, "load_all_arrays", time_taken))
+        time_taken = timeit.timeit(lambda: load_all_arrays(events_dict[data_type]), number=1)
+        times.append((data_type, "load_all_arrays", time_taken))
         
-#         time_taken = timeit.timeit(lambda: load_all_arrays_while_using_filter_name(events_dict[data_type]), number=1)
-#         times.append((data_type, "load_all_arrays_while_using_filter_name", time_taken))
+        time_taken = timeit.timeit(lambda: load_all_arrays_while_using_filter_name(events_dict[data_type]), number=1)
+        times.append((data_type, "load_all_arrays_while_using_filter_name", time_taken))
         
-#         time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type]), number=1)
-#         times.append((data_type, "load_24_arrays_while_using_filter_name", time_taken))
+        time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type]), number=1)
+        times.append((data_type, "load_24_arrays_while_using_filter_name", time_taken))
         
         time_taken = timeit.timeit(lambda: load_array_while_using_filter_name(events_dict[data_type]), number=1)
         times.append((data_type, "load_array_while_using_filter_name", time_taken))
@@ -176,21 +191,14 @@ def start_all_performance_tests():
 
 
 results = start_all_performance_tests()
-print(results.to_string(index=False))
+# Output results:
+print("timeit results (in seconds): \n", results.to_markdown(index=False))
 
-# %%
-# print(results.to_string(index=False))
 
-# Pivot the DataFrame
-df_pivot = results.pivot(index='func_name', columns='data_type', values='time(s)')
-
-# Clean up the columns and reset index if needed
-df_pivot.columns.name = None  # Remove the name of the columns
-df_pivot = df_pivot.reset_index()  # Reset the index if you want a cleaner look
-
-# Output the pivoted DataFrame
-print(df_pivot.to_markdown(index=False))
-
+# %% [markdown]
+# ### Check RNTuple data integrity
+# When loading RNTuple data we need to be sure that data is correct. We do that by comparing RNTuple array data with TTree - it should be identical. <br>
+# Comparison should be done with all arrays, but for demonstration purposes and time saving we use specific columns from https://github.com/iris-hep/idap-200gbps/blob/main/materialize_branches.ipynb notebook.
 
 # %%
 # This cell compares data between TTree and RNTuple for each key array, ensuring that RNTuple does not have corrupted data:
@@ -233,8 +241,8 @@ def compare_all_arrays(events_1, events_2, keys):
 
     print(f"ak array comparison statistics: matched count: {ak_match_count}; mismatch count: {ak_mismatch_count}; errors: {ak_error_count}")
     
-events_tt = events_list[0]
-events_rn = events_list[1]
+events_tt = events_dict["TT"]
+events_rn = events_dict["RN"]
 
 keys = [
         "GenPart_pt", "GenPart_eta", "GenPart_phi", "CorrT1METJet_phi",
@@ -251,6 +259,10 @@ compare_all_arrays(events_tt, events_rn, keys)
 
     
 
+
+# %% [markdown]
+# ### Test RNTuple data loading from cluster edges
+# There was an issue detected, where RNTuple array data integrity was lost each time when index range crossed edge boundaries. (PR: https://github.com/scikit-hep/uproot5/pull/1285) This cell checks small set of data around clustary edges.
 
 # %%
 # Comparing only certain regions of arrays:
@@ -295,18 +307,3 @@ key = "Electron_hoe"
 collect_breaking_points(key)
 print("Finished cell.")
 
-
-# %%
-cluster_starts = [md.num_first_entry for md in events_632.cluster_summaries][1:] # Skip first, because it is 0.
-print("Starts of clusters: ", cluster_starts)
-events_632 = events_list[0]
-events_6x = events_list[1]
-print("Keys: ", events_6x.keys())
-print("Keys: ", events_632.keys())
-
-
-
-
-
-
-# %%
