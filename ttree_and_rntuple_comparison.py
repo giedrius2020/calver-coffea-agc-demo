@@ -195,16 +195,32 @@ def measure_increasing_key_count():
     print("Count of keys: ", len(all_keys))
     
     for data_type, file in all_files.items():
-        for i in range(1, len(all_keys), 50):
+        for i in range(0, len(all_keys), 50):
             time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys[:i]), number=1)
             times.append((i, data_type, f"load_{i}_arrays_while_using_filter_name", time_taken))
-        #     print(data_type, i)
+            # print(data_type, i, time_taken)
+        # print(data_type, "tests finished")
+    return format_test_results(times)
+
+def measure_array_loading_with_different_arrays():
+    # NOTE: two arrays always loaded instead of one, to have a workaround for the issue when RNTuple is much slower when loading only one array:
+    print("Starting to timeit loading arrays with increasing count: ")
+    times = []
+    all_keys = events_dict["TT"].keys()
+    print("Count of keys: ", len(all_keys))
+    
+    for data_type, file in all_files.items():
+        for i in range(0, len(all_keys), 1):
+            time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys[i]), number=1)
+            times.append((i, data_type, f"load_{i}_arrays_while_using_filter_name", time_taken))
+            # print(data_type, i, time_taken)
         # print(data_type, "tests finished")
     return format_test_results(times)
 
 
 results_1 = start_all_performance_tests()
 results_2 = measure_increasing_key_count()
+results_3 = measure_array_loading_with_different_arrays()
 
 # Calculate the sum for each column (excluding 'func_name')
 sums = results_1[['RN', 'TT']].sum()
@@ -216,26 +232,26 @@ print("timeit results (in seconds): \n", results_1.to_markdown(index=True))
 
 
 # %% [markdown]
-# ### Check RNTuple data integrity
-# When loading RNTuple data we need to be sure that data is correct. We do that by comparing RNTuple array data with TTree - it should be identical. <br>
-# Comparison should be done with all arrays, but for demonstration purposes and time saving we use specific columns from https://github.com/iris-hep/idap-200gbps/blob/main/materialize_branches.ipynb notebook.
+# ### Execution time graphs:
+# - Graph 1: with each iteration more arrays are loaded at the same time. At first iteration 50 arrays are loaded, and 900 in the last.
+# - Graph 2: each single array in the file is loaded separately and execution time is measured. This way we can see how much time each array takes to load.
 
 # %%
-def plot_results(df_pivot):
+def plot_results(df, title, xlabel):
     # Set plot style
     sns.set(style="whitegrid")
 
     # Melt the DataFrame to a long format for seaborn
-    df_melted = df_pivot.melt(id_vars=['key_cnt'], var_name='Data Type', value_name='Time (s)')
+    df_melted = df.melt(id_vars=['key_cnt'], var_name='Data Type', value_name='Time (s)')
     
     # Create a line plot
     plt.figure(figsize=(10, 6))
-    sns.lineplot(x='key_cnt', y='Time (s)', hue='Data Type', marker='o', data=df_melted)
+    sns.lineplot(x='key_cnt', y='Time (s)', hue='Data Type', marker='o', markeredgewidth=0, data=df_melted)
     
     # Add labels and title
-    plt.xlabel('Count of loaded arrays', fontsize=12)
+    plt.xlabel(xlabel, fontsize=12)
     plt.ylabel('Execution Time (s)', fontsize=12)
-    plt.title('Execution Time by Count Of Arrays and Data Type', fontsize=14)
+    plt.title(title, fontsize=14)
     
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha='right')
@@ -245,11 +261,25 @@ def plot_results(df_pivot):
     plt.show()
 
 
-plot_results(results_2)
+# print(results_2)
+results_2.rename(columns={'RN': 'RNTuple', 'TT': 'TTree'}, inplace=True)
 
-results_1.to_csv('results_1.csv', index=True)
-results_2.to_csv('results_2.csv', index=True)
+results_3.rename(columns={'RN': 'RNTuple', 'TT': 'TTree'}, inplace=True)
 
+plot_results(df=results_2, title='Execution Time by Count Of Arrays and Data Type', xlabel='Count of loaded arrays')
+# NOTE: To prove that accumulation of execution time is negligible, 
+plot_results(df=results_3, title='Execution Time by Key Index and Data Type', xlabel='Key index of loaded array')
+
+
+
+
+# results_1.to_csv('results_1.csv', index=True)
+# results_2.to_csv('results_2.csv', index=True)
+
+# %% [markdown]
+# ### Check RNTuple data integrity
+# When loading RNTuple data we need to be sure that data is correct. We do that by comparing RNTuple array data with TTree - it should be identical. <br>
+# Comparison should be done with all arrays, but for demonstration purposes and time saving we use specific columns from https://github.com/iris-hep/idap-200gbps/blob/main/materialize_branches.ipynb notebook.
 
 # %%
 # This cell compares data between TTree and RNTuple for each key array, ensuring that RNTuple does not have corrupted data:
