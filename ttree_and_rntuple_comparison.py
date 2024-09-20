@@ -50,6 +50,9 @@ print(f"uproot: {uproot.__version__}")
 # ### File loading
 # Load ROOT files with one of two approaches: uproot or coffea.<br>
 # NOTE: coffea uses Dask, which does not support RNTuple yet. Therefore, in this notebook we will only use data loaded with uproot.
+#
+# RNTuple files were created with this procedure:
+# https://gist.github.com/davidlange6/604f60f8a684b16538f4042bc96a8f18 (original TTree EOS file path is specified in RecipeToConvert.txt )
 
 # %%
 all_files = {}
@@ -60,6 +63,8 @@ events_dict = {}
 # all_files.append("root://eospublic.cern.ch//eos/root-eos/AGC/nanoAOD/TT_TuneCUETP8M1_13TeV-amcatnlo-pythia8/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root") # TTree remote
 
 # Files downloaded locally:
+
+
 all_files["TT"] = "/home/cms-jovyan/my_root_files/ttree/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root" # TTree local
 all_files["RN"] = "/home/cms-jovyan/my_root_files/rntuple/cmsopendata2015_ttbar_19978_PU25nsData2015v1_76X_mcRun2_asymptotic_v12_ext1-v1_60000_0004.root"  # RNTuple local
 
@@ -96,6 +101,7 @@ load_files_with_uproot(all_files)
 
 # %%
 import timeit
+import random
     
 def format_test_results(times):
     df = pd.DataFrame(times )
@@ -124,30 +130,37 @@ def format_test_results(times):
 
 
 def load_file(data_type, file):
+    # Load the metadata, which will be used later to load array data:
     with uproot.open(file) as f:
         events = f["Events"]
         events_dict[data_type] = events
 
 def load_arrays_for_each_key(events):
+    # Load arrays one by one:
     for key in events.keys():
         events.arrays(filter_name=[key])[key]
         
 def load_all_arrays(events):
+    # Load all arrays at the same time (without filter_name argument):
     events.arrays()
     
 def load_all_arrays_while_using_filter_name(events):
+    # Load all arrays at the same time (while using filter_name argument):
     chosen_keys = events.keys()
     events.arrays(filter_name=chosen_keys)[chosen_keys]
 
 def load_array_while_using_filter_name(events):
+    # Load single array while using filter name argument:
     key = "GenPart_pt"
     events.arrays(filter_name=[key])[key]
     
     
 def load_24_arrays_while_using_filter_name(events, keys):
+    # Load specific 24 arrays (keys passed as argument):
     events.arrays(filter_name=keys)[keys]
         
 def start_all_performance_tests():
+    # Launch all tests and measure execution time for each:
     print("Starting to timeit on various functions: ")
     times = []
     # events_dict = {}
@@ -188,39 +201,37 @@ def start_all_performance_tests():
     return format_test_results(times)
 
 
-def measure_increasing_key_count():
+def measure_increasing_key_count(list_of_keys):
+    # With each iteration load more and more arrays at the same time, measure time for each iteration:
     print("Starting to timeit loading arrays with increasing count: ")
     times = []
-    all_keys = events_dict["TT"].keys()
-    print("Count of keys: ", len(all_keys))
-    
     for data_type, file in all_files.items():
-        for i in range(0, len(all_keys), 50):
+        for i in range(0, len(list_of_keys), 50):
             time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys[:i]), number=1)
             times.append((i, data_type, f"load_{i}_arrays_while_using_filter_name", time_taken))
-            # print(data_type, i, time_taken)
-        # print(data_type, "tests finished")
+        # Also do with all array at the end:
+        time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys), number=1)
+        times.append((i, data_type, f"load_{len(list_of_keys)}_arrays_while_using_filter_name", time_taken))
     return format_test_results(times)
 
-def measure_array_loading_with_different_arrays():
-    # NOTE: two arrays always loaded instead of one, to have a workaround for the issue when RNTuple is much slower when loading only one array:
-    print("Starting to timeit loading arrays with increasing count: ")
+def measure_array_loading_with_different_arrays(list_of_keys):
+    # With each iteration load one array with different key:
+    print("Starting to timeit loading array for each key: ")
     times = []
-    all_keys = events_dict["TT"].keys()
-    print("Count of keys: ", len(all_keys))
-    
     for data_type, file in all_files.items():
-        for i in range(0, len(all_keys), 1):
+        for i in range(0, len(list_of_keys), 1):
             time_taken = timeit.timeit(lambda: load_24_arrays_while_using_filter_name(events_dict[data_type], all_keys[i]), number=1)
             times.append((i, data_type, f"load_{i}_arrays_while_using_filter_name", time_taken))
-            # print(data_type, i, time_taken)
-        # print(data_type, "tests finished")
     return format_test_results(times)
 
 
+all_keys = events_dict["TT"].keys()
+
 results_1 = start_all_performance_tests()
-results_2 = measure_increasing_key_count()
-results_3 = measure_array_loading_with_different_arrays()
+results_2 = measure_increasing_key_count(all_keys)
+random.shuffle(all_keys) # Shuffle keys to check if array data content affects the performance
+results_3 = measure_increasing_key_count(all_keys)
+results_4 = measure_array_loading_with_different_arrays(all_keys)
 
 # Calculate the sum for each column (excluding 'func_name')
 sums = results_1[['RN', 'TT']].sum()
@@ -263,12 +274,13 @@ def plot_results(df, title, xlabel):
 
 # print(results_2)
 results_2.rename(columns={'RN': 'RNTuple', 'TT': 'TTree'}, inplace=True)
-
 results_3.rename(columns={'RN': 'RNTuple', 'TT': 'TTree'}, inplace=True)
+results_4.rename(columns={'RN': 'RNTuple', 'TT': 'TTree'}, inplace=True)
+
 
 plot_results(df=results_2, title='Execution Time by Count Of Arrays and Data Type', xlabel='Count of loaded arrays')
-# NOTE: To prove that accumulation of execution time is negligible, 
-plot_results(df=results_3, title='Execution Time by Key Index and Data Type', xlabel='Key index of loaded array')
+plot_results(df=results_3, title='Execution Time by Count Of Arrays and Data Type (Shuffled key order)', xlabel='Count of loaded arrays')
+plot_results(df=results_4, title='Execution Time by Key Index and Data Type', xlabel='Key index of loaded array')
 
 
 
