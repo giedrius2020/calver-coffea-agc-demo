@@ -244,8 +244,9 @@ print("timeit results (in seconds): \n", results_1.to_markdown(index=True))
 
 # %% [markdown]
 # ### Execution time graphs:
-# - Graph 1: with each iteration more arrays are loaded at the same time. At first iteration 50 arrays are loaded, and 900 in the last.
-# - Graph 2: each single array in the file is loaded separately and execution time is measured. This way we can see how much time each array takes to load.
+# - Graph 1: with each iteration more arrays are loaded at the same time. At first iteration 50 arrays are loaded, and 947 in the last.
+# - Graph 2: same as graph 1, but key order is shuffled. This way can check if data affect the execution time increase.
+# - Graph 3: each single array in the file is loaded separately and execution time is measured. This way we can see how much time each array takes to load. (key order is the same as in graph 2).
 
 # %%
 def plot_results(df, title, xlabel):
